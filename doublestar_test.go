@@ -36,7 +36,7 @@ var matchTests = []MatchTest{
 	{"/*", "/debug/", false, false, false, nil, false, false, true, false, 0, 0},
 	{"/*", "//", false, false, false, nil, false, false, true, false, 0, 0},
 	{"abc", "abc", true, true, false, nil, false, false, true, true, 1, 1},
-	{"*", "abc", true, true, false, nil, false, false, true, true, 24, 19},
+	{"*", "abc", true, true, false, nil, false, false, true, true, 25, 20},
 	{"*c", "abc", true, true, false, nil, false, false, true, true, 2, 2},
 	{"*/", "a/", true, true, false, nil, false, false, true, false, 0, 0},
 	{"a*", "a", true, true, false, nil, false, false, true, true, 9, 9},
@@ -64,8 +64,8 @@ var matchTests = []MatchTest{
 	{"a[!a]b", "a☺b", true, true, false, nil, false, false, false, true, 1, 1},
 	{"a???b", "a☺b", false, false, false, nil, false, false, true, true, 0, 0},
 	{"a[^a][^a][^a]b", "a☺b", false, false, false, nil, false, false, true, true, 0, 0},
-	{"[a-ζ]*", "α", true, true, false, nil, false, false, true, true, 21, 18},
-	{"*[a-ζ]", "A", false, false, false, nil, false, false, true, true, 21, 18},
+	{"[a-ζ]*", "α", true, true, false, nil, false, false, true, true, 22, 19},
+	{"*[a-ζ]", "A", false, false, false, nil, false, false, true, true, 22, 19},
 	{"a?b", "a/b", false, false, false, nil, false, false, true, true, 1, 1},
 	{"a*b", "a/b", false, false, false, nil, false, false, true, true, 1, 1},
 	{"[\\]a]", "]", true, true, false, nil, false, false, true, !onWindows, 2, 2},
@@ -100,7 +100,7 @@ var matchTests = []MatchTest{
 	{"*x", "xxx", true, true, false, nil, false, false, true, true, 4, 4},
 	{"[abc]", "b", true, true, false, nil, false, false, true, true, 3, 3},
 	{"[abc123]", "1", true, true, false, nil, false, false, true, true, 4, 4},
-	{"[a-z0-9]", "1", true, true, false, nil, false, false, true, true, 7, 7},
+	{"[a-z0-9]", "1", true, true, false, nil, false, false, true, true, 8, 8},
 	{"**", "", true, true, false, nil, false, false, false, false, 38, 38},
 	{"a/**", "a", true, true, false, nil, false, false, false, true, 7, 7},
 	{"a/**/", "a", true, true, false, nil, false, false, false, true, 4, 4},
@@ -108,12 +108,12 @@ var matchTests = []MatchTest{
 	{"a/**/", "a/", true, true, false, nil, false, false, false, false, 4, 4},
 	{"a/**", "a/b", true, true, false, nil, false, false, false, true, 7, 7},
 	{"a/**", "a/b/c", true, true, false, nil, false, false, false, true, 7, 7},
-	{"**/c", "c", true, true, false, nil, !onWindows, false, false, true, 5, 4},
-	{"**/c", "b/c", true, true, false, nil, !onWindows, false, false, true, 5, 4},
-	{"**/c", "a/b/c", true, true, false, nil, !onWindows, false, false, true, 5, 4},
-	{"**/c", "a/b", false, false, false, nil, !onWindows, false, false, true, 5, 4},
-	{"**/c", "abcd", false, false, false, nil, !onWindows, false, false, true, 5, 4},
-	{"**/c", "a/abc", false, false, false, nil, !onWindows, false, false, true, 5, 4},
+	{"**/c", "c", true, true, false, nil, !onWindows, false, false, true, 6, 5},
+	{"**/c", "b/c", true, true, false, nil, !onWindows, false, false, true, 6, 5},
+	{"**/c", "a/b/c", true, true, false, nil, !onWindows, false, false, true, 6, 5},
+	{"**/c", "a/b", false, false, false, nil, !onWindows, false, false, true, 6, 5},
+	{"**/c", "abcd", false, false, false, nil, !onWindows, false, false, true, 6, 5},
+	{"**/c", "a/abc", false, false, false, nil, !onWindows, false, false, true, 6, 5},
 	{"a/**/b", "a/b", true, true, false, nil, false, false, false, true, 2, 2},
 	{"a/**/c", "a/b/c", true, true, false, nil, false, false, false, true, 2, 2},
 	{"a/**/d", "a/b/c/d", true, true, false, nil, false, false, false, true, 1, 1},
@@ -144,7 +144,7 @@ var matchTests = []MatchTest{
 	{"abc**", "abc/b", false, false, false, nil, false, false, false, true, 3, 3},
 	{"**/*.txt", "abc/【test】.txt", true, true, false, nil, !onWindows, false, false, true, 1, 1},
 	{"**/【*", "abc/【test】.txt", true, true, false, nil, !onWindows, false, false, true, 1, 1},
-	{"**/{a,b}", "a/b", true, true, false, nil, !onWindows, false, false, true, 5, 5},
+	{"**/{a,b}", "a/b", true, true, false, nil, !onWindows, false, false, true, 7, 7},
 	{"a/*/*/d", "a/b/c/d", true, true, false, nil, false, false, true, true, 1, 1},
 	// unfortunately, io/fs can't handle this, so neither can Glob =(
 	{"broken-symlink", "broken-symlink", true, true, false, nil, false, false, true, false, 1, 1},
@@ -156,6 +156,10 @@ var matchTests = []MatchTest{
 	{"*/symlink-dir/*", "b/symlink-dir/f", true, true, false, nil, !onWindows, false, true, !onWindows, 2, 2},
 	{"e/\\[x\\]/*", "e/[x]/[y]", true, true, false, nil, false, false, true, !onWindows, 1, 1},
 	{"e/\\[x\\]/*/z", "e/[x]/[y]/z", true, true, false, nil, false, false, true, !onWindows, 1, 1},
+	{"e/**/{z,other}", "e/[x]/[y]/z", true, true, false, nil, false, false, false, !onWindows, 1, 0},
+	{"f/\\{a,b\\}/{c,other}", "f/{a,b}/c", true, true, false, nil, false, false, false, !onWindows, 1, 0},
+	{"f/\\*/{a,other}", "f/*/a", true, true, false, nil, false, false, false, !onWindows, 1, 0},
+	{"f/\\?/{a,other}", "f/?/a", true, true, false, nil, false, false, false, !onWindows, 1, 0},
 	{"e/**", "e/**", true, true, false, nil, false, false, false, !onWindows, 14, 9},
 	{"e/**", "e/*", true, true, false, nil, false, false, false, !onWindows, 14, 9},
 	{"e/**", "e/?", true, true, false, nil, false, false, false, !onWindows, 14, 9},
@@ -838,6 +842,7 @@ func TestMain(m *testing.M) {
 	mkdirp("test", "axbxcxdxexxx")
 	mkdirp("test", "b")
 	mkdirp("test", "e", "[x]", "[y]")
+	mkdirp("test", "f", "{a,b}")
 	mkdirp("test", "case-sensitive")
 
 	// create test files
@@ -869,6 +874,7 @@ func TestMain(m *testing.M) {
 	touch("test", "e", "}")
 	touch("test", "e", "[]")
 	touch("test", "e", "[x]", "[y]", "z")
+	touch("test", "f", "{a,b}", "c")
 
 	touch("test", "case-sensitive", "file")
 	touch("test", "case-sensitive", "FILE")
@@ -885,6 +891,11 @@ func TestMain(m *testing.M) {
 		touch("test", "e", "****")
 		touch("test", "e", "?")
 		touch("test", "e", "\\")
+
+		mkdirp("test", "f", "*")
+		touch("test", "f", "*", "a")
+		mkdirp("test", "f", "?")
+		touch("test", "f", "?", "a")
 
 		symlink("../axbxcxdxe/", "test/b/symlink-dir")
 		symlink("/tmp/nonexistant-file-20160902155705", "test/broken-symlink")
