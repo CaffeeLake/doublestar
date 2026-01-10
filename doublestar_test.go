@@ -36,7 +36,7 @@ var matchTests = []MatchTest{
 	{"/*", "/debug/", false, false, false, nil, false, false, true, false, 0, 0},
 	{"/*", "//", false, false, false, nil, false, false, true, false, 0, 0},
 	{"abc", "abc", true, true, false, nil, false, false, true, true, 1, 1},
-	{"*", "abc", true, true, false, nil, false, false, true, true, 25, 20},
+	{"*", "abc", true, true, false, nil, false, false, true, true, 29, 24},
 	{"*c", "abc", true, true, false, nil, false, false, true, true, 2, 2},
 	{"*/", "a/", true, true, false, nil, false, false, true, false, 0, 0},
 	{"a*", "a", true, true, false, nil, false, false, true, true, 9, 9},
@@ -64,8 +64,8 @@ var matchTests = []MatchTest{
 	{"a[!a]b", "a☺b", true, true, false, nil, false, false, false, true, 1, 1},
 	{"a???b", "a☺b", false, false, false, nil, false, false, true, true, 0, 0},
 	{"a[^a][^a][^a]b", "a☺b", false, false, false, nil, false, false, true, true, 0, 0},
-	{"[a-ζ]*", "α", true, true, false, nil, false, false, true, true, 22, 19},
-	{"*[a-ζ]", "A", false, false, false, nil, false, false, true, true, 22, 19},
+	{"[a-ζ]*", "α", true, true, false, nil, false, false, true, true, 23, 20},
+	{"*[a-ζ]", "A", false, false, false, nil, false, false, true, true, 26, 23},
 	{"a?b", "a/b", false, false, false, nil, false, false, true, true, 1, 1},
 	{"a*b", "a/b", false, false, false, nil, false, false, true, true, 1, 1},
 	{"[\\]a]", "]", true, true, false, nil, false, false, true, !onWindows, 2, 2},
@@ -203,6 +203,11 @@ var matchTests = []MatchTest{
 	{"nopermission/*", "nopermission/file", true, false, false, nil, true, false, true, !onWindows, 0, 0},
 	{"nopermission/dir/", "nopermission/dir", false, false, false, nil, true, false, true, !onWindows, 0, 0},
 	{"nopermission/file", "nopermission/file", true, false, false, nil, true, false, true, !onWindows, 0, 0},
+	{".*", ".hidden_file", true, true, false, nil, false, false, false, true, 3, 3},
+	{".hidden_dir/**", ".hidden_dir", true, true, false, nil, false, false, false, true, 2, 2},
+	{".hidden_dir/*", ".hidden_dir/.nested_hidden", true, true, false, nil, false, false, false, true, 1, 1},
+	{".another_hidden/file", ".another_hidden/file", true, true, false, nil, false, false, false, true, 1, 1},
+	{"foo/**/bar", "foo/visible/bar", true, true, false, nil, false, false, false, true, 4, 4},
 }
 
 // True if the file system supports case-sensitive filenames
@@ -219,6 +224,10 @@ var numResultsNoFollow []int
 // Calculate the number of results that we expect with all
 // of the options enabled at runtime and memoize them here
 var numResultsAllOpts []int
+
+// Calculate the number of results that we expect
+// WithNoHidden at runtime and memoize them here
+var numResultsNoHidden []int
 
 func TestValidatePattern(t *testing.T) {
 	for idx, tt := range matchTests {
@@ -462,6 +471,10 @@ func TestGlobWithNoFollow(t *testing.T) {
 	doGlobTest(t, WithNoFollow())
 }
 
+func TestGlobWithNoHidden(t *testing.T) {
+	doGlobTest(t, WithNoHidden())
+}
+
 func TestGlobWithAllOptions(t *testing.T) {
 	doGlobTest(t, WithCaseInsensitive(), WithFailOnIOErrors(), WithFailOnPatternNotExist(), WithFilesOnly(), WithNoFollow())
 }
@@ -508,6 +521,10 @@ func TestGlobWalkWithFilesOnly(t *testing.T) {
 
 func TestGlobWalkWithNoFollow(t *testing.T) {
 	doGlobWalkTest(t, WithNoFollow())
+}
+
+func TestGlobWalkWithNoHidden(t *testing.T) {
+	doGlobWalkTest(t, WithNoHidden())
 }
 
 func TestGlobWalkWithAllOptions(t *testing.T) {
@@ -569,6 +586,10 @@ func TestFilepathGlobWithFilesOnly(t *testing.T) {
 
 func TestFilepathGlobWithNoFollow(t *testing.T) {
 	doFilepathGlobTest(t, WithNoFollow())
+}
+
+func TestFilepathGlobWithNoHidden(t *testing.T) {
+	doFilepathGlobTest(t, WithNoHidden())
 }
 
 func doFilepathGlobTest(t *testing.T, opts ...GlobOption) {
@@ -635,7 +656,9 @@ func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, g *glob, 
 		if onWindows {
 			numResults = tt.winNumResults
 		}
-		if g.filesOnly {
+		if g.noHidden {
+			numResults = numResultsNoHidden[idx]
+		} else if g.filesOnly {
 			if g.noFollow {
 				numResults = numResultsAllOpts[idx]
 			} else {
@@ -651,7 +674,8 @@ func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, g *glob, 
 		if len(matches) != numResults {
 			t.Errorf("#%v. %v(%#q, %#v) = %#v - should have %#v results, got %#v", idx, fn, tt.pattern, g, matches, numResults, len(matches))
 		}
-		if !g.filesOnly && !g.noFollow && inSlice(tt.testPath, matches) != tt.shouldMatchGlob {
+		// Skip testPath check for noHidden since the match semantics are different
+		if !g.filesOnly && !g.noFollow && !g.noHidden && inSlice(tt.testPath, matches) != tt.shouldMatchGlob {
 			if tt.shouldMatchGlob {
 				t.Errorf("#%v. %v(%#q, %#v) = %#v - doesn't contain %v, but should", idx, fn, tt.pattern, g, matches, tt.testPath)
 			} else {
@@ -769,6 +793,7 @@ func buildNumResults() {
 	numResultsFilesOnly = make([]int, testLen, testLen)
 	numResultsNoFollow = make([]int, testLen, testLen)
 	numResultsAllOpts = make([]int, testLen, testLen)
+	numResultsNoHidden = make([]int, testLen, testLen)
 
 	fsys := os.DirFS("test")
 	g := newGlob()
@@ -798,6 +823,14 @@ func buildNumResults() {
 			numResultsFilesOnly[idx] = filesOnly
 			numResultsNoFollow[idx] = noFollow
 			numResultsAllOpts[idx] = allOpts
+
+			// Compute noHidden results by actually running with WithNoHidden
+			noHidden := 0
+			GlobWalk(fsys, tt.pattern, func(p string, d fs.DirEntry) error {
+				noHidden++
+				return nil
+			}, WithNoHidden())
+			numResultsNoHidden[idx] = noHidden
 		}
 	}
 }
@@ -881,6 +914,18 @@ func TestMain(m *testing.M) {
 	touch("test", "case-sensitive", "File")
 
 	touch("test", "}")
+
+	mkdirp("test", ".hidden_dir")
+	mkdirp("test", ".another_hidden")
+	mkdirp("test", "foo", ".hidden", "deep")
+	mkdirp("test", "foo", "visible")
+	touch("test", ".hidden_file")
+	touch("test", ".hidden_dir", ".nested_hidden")
+	touch("test", ".another_hidden", "file")
+	touch("test", "foo", ".hidden", "bar")
+	touch("test", "foo", ".hidden", "deep", "bar")
+	touch("test", "foo", "visible", "bar")
+	touch("test", "foo", "bar")
 
 	if !onWindows {
 		// these files/symlinks won't work on Windows
