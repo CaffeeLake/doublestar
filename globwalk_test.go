@@ -17,7 +17,7 @@ type SkipTest struct {
 var skipTests = []SkipTest{
 	{"a", "a", "a", 0, 0},
 	{"a/", "a", "a", 1, 1},
-	{"*", "b", "c", 15, 13},
+	{"*", "b", "c", 12, 10},
 	{"a/**", "a", "a", 0, 0},
 	{"a/**", "a/abc", "a/b", 1, 1},
 	{"a/**", "a/b/c", "a/b/c/d", 5, 5},
@@ -26,7 +26,7 @@ var skipTests = []SkipTest{
 }
 
 func TestSkipDirInGlobWalk(t *testing.T) {
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	for idx, tt := range skipTests {
 		testSkipDirInGlobWalkWith(t, idx, tt, fsys)
 	}

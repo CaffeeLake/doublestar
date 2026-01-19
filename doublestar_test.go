@@ -20,7 +20,7 @@ type MatchTest struct {
 	expectIOErr           bool   // whether or not to expect an io error
 	expectPatternNotExist bool   // whether or not to expect ErrPatternNotExist
 	isStandard            bool   // pattern doesn't use any doublestar features (e.g. '**', '{a,b}')
-	testOnDisk            bool   // true: test pattern against files in "test" directory
+	testOnDisk            bool   // true: test pattern against files in "testdata" directory
 	numResults            int    // number of glob results if testing on disk
 	winNumResults         int    // number of glob results on Windows
 }
@@ -36,7 +36,7 @@ var matchTests = []MatchTest{
 	{"/*", "/debug/", false, false, false, nil, false, false, true, false, 0, 0},
 	{"/*", "//", false, false, false, nil, false, false, true, false, 0, 0},
 	{"abc", "abc", true, true, false, nil, false, false, true, true, 1, 1},
-	{"*", "abc", true, true, false, nil, false, false, true, true, 29, 24},
+	{"*", "abc", true, true, false, nil, false, false, true, true, 26, 21},
 	{"*c", "abc", true, true, false, nil, false, false, true, true, 2, 2},
 	{"*/", "a/", true, true, false, nil, false, false, true, false, 0, 0},
 	{"a*", "a", true, true, false, nil, false, false, true, true, 9, 9},
@@ -65,7 +65,7 @@ var matchTests = []MatchTest{
 	{"a???b", "a☺b", false, false, false, nil, false, false, true, true, 0, 0},
 	{"a[^a][^a][^a]b", "a☺b", false, false, false, nil, false, false, true, true, 0, 0},
 	{"[a-ζ]*", "α", true, true, false, nil, false, false, true, true, 23, 20},
-	{"*[a-ζ]", "A", false, false, false, nil, false, false, true, true, 26, 23},
+	{"*[a-ζ]", "A", false, false, false, nil, false, false, true, true, 23, 20},
 	{"a?b", "a/b", false, false, false, nil, false, false, true, true, 1, 1},
 	{"a*b", "a/b", false, false, false, nil, false, false, true, true, 1, 1},
 	{"[\\]a]", "]", true, true, false, nil, false, false, true, !onWindows, 2, 2},
@@ -203,11 +203,13 @@ var matchTests = []MatchTest{
 	{"nopermission/*", "nopermission/file", true, false, false, nil, true, false, true, !onWindows, 0, 0},
 	{"nopermission/dir/", "nopermission/dir", false, false, false, nil, true, false, true, !onWindows, 0, 0},
 	{"nopermission/file", "nopermission/file", true, false, false, nil, true, false, true, !onWindows, 0, 0},
-	{".*", ".hidden_file", true, true, false, nil, false, false, false, true, 3, 3},
-	{".hidden_dir/**", ".hidden_dir", true, true, false, nil, false, false, false, true, 2, 2},
-	{".hidden_dir/*", ".hidden_dir/.nested_hidden", true, true, false, nil, false, false, false, true, 1, 1},
-	{".another_hidden/file", ".another_hidden/file", true, true, false, nil, false, false, false, true, 1, 1},
-	{"foo/**/bar", "foo/visible/bar", true, true, false, nil, false, false, false, true, 4, 4},
+	{"hidden-tests/.*", "hidden-tests/.hidden-file", true, true, false, nil, false, false, true, !onWindows, 2, 2},
+	{"hidden-tests/?hidden*", "hidden-tests/.hidden-file", true, true, false, nil, false, false, true, !onWindows, 2, 2},
+	{"hidden-tests/*", "hidden-tests/visible-file", true, true, false, nil, false, false, true, true, 3, 3},
+	{"hidden-tests/**", "hidden-tests/.hidden-dir/.hidden-file", true, true, false, nil, false, false, false, !onWindows, 6, 6},
+	{"hidden-tests/**", "hidden-tests/hidden-dir/hidden-file", true, true, false, nil, false, false, false, onWindows, 6, 6},
+	{"hidden-tests/.hidden-dir/*", "hidden-tests/.hidden-dir/.hidden-file", true, true, false, nil, false, false, true, !onWindows, 2, 2},
+	{"hidden-tests/hidden-dir/*", "hidden-tests/hidden-dir/hidden-file", true, true, false, nil, false, false, true, onWindows, 2, 2},
 }
 
 // True if the file system supports case-sensitive filenames
@@ -221,13 +223,13 @@ var numResultsFilesOnly []int
 // WithNoFollow at runtime and memoize them here
 var numResultsNoFollow []int
 
-// Calculate the number of results that we expect with all
-// of the options enabled at runtime and memoize them here
-var numResultsAllOpts []int
-
 // Calculate the number of results that we expect
 // WithNoHidden at runtime and memoize them here
 var numResultsNoHidden []int
+
+// Calculate the number of results that we expect with all
+// of the options enabled at runtime and memoize them here
+var numResultsAllOpts []int
 
 func TestValidatePattern(t *testing.T) {
 	for idx, tt := range matchTests {
@@ -446,50 +448,56 @@ func BenchmarkGoPathMatch(b *testing.B) {
 }
 
 func TestGlob(t *testing.T) {
-	doGlobTest(t)
+	doGlobTest(t, nil)
 }
 
 func TestGlobWithCaseInsensitive(t *testing.T) {
 	if fsIsCaseSensitive {
-		doGlobTest(t, WithCaseInsensitive())
+		doGlobTest(t, nil, WithCaseInsensitive())
 	}
 }
 
 func TestGlobWithFailOnIOErrors(t *testing.T) {
-	doGlobTest(t, WithFailOnIOErrors())
+	doGlobTest(t, nil, WithFailOnIOErrors())
 }
 
 func TestGlobWithFailOnPatternNotExist(t *testing.T) {
-	doGlobTest(t, WithFailOnPatternNotExist())
+	doGlobTest(t, nil, WithFailOnPatternNotExist())
 }
 
 func TestGlobWithFilesOnly(t *testing.T) {
-	doGlobTest(t, WithFilesOnly())
+	doGlobTest(t, numResultsFilesOnly, WithFilesOnly())
 }
 
 func TestGlobWithNoFollow(t *testing.T) {
-	doGlobTest(t, WithNoFollow())
+	doGlobTest(t, numResultsNoFollow, WithNoFollow())
 }
 
 func TestGlobWithNoHidden(t *testing.T) {
-	doGlobTest(t, WithNoHidden())
+	doGlobTest(t, numResultsNoHidden, WithNoHidden())
 }
 
 func TestGlobWithAllOptions(t *testing.T) {
-	doGlobTest(t, WithCaseInsensitive(), WithFailOnIOErrors(), WithFailOnPatternNotExist(), WithFilesOnly(), WithNoFollow())
+	doGlobTest(t, numResultsAllOpts, WithCaseInsensitive(), WithFailOnIOErrors(), WithFailOnPatternNotExist(), WithFilesOnly(), WithNoFollow(), WithNoHidden())
 }
 
-func doGlobTest(t *testing.T, opts ...GlobOption) {
+func doGlobTest(t *testing.T, numResults []int, opts ...GlobOption) {
 	glob := newGlob(opts...)
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	for idx, tt := range matchTests {
 		if tt.testOnDisk && (!tt.caseSensitive || fsIsCaseSensitive) {
-			testGlobWith(t, idx, tt, glob, opts, fsys)
+			expectedNum := tt.numResults
+			if numResults != nil {
+				expectedNum = numResults[idx]
+			} else if onWindows {
+				expectedNum = tt.winNumResults
+			}
+			testGlobWith(t, idx, tt, glob, opts, expectedNum, fsys)
 		}
 	}
 }
 
-func testGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOption, fsys fs.FS) {
+func testGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOption, expectedNum int, fsys fs.FS) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("#%v. Glob(%#q, %#v) panicked: %#v", idx, tt.pattern, g, r)
@@ -497,51 +505,57 @@ func testGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOptio
 	}()
 
 	matches, err := Glob(fsys, tt.pattern, opts...)
-	verifyGlobResults(t, idx, "Glob", tt, g, fsys, matches, err)
+	verifyGlobResults(t, idx, "Glob", tt, g, matches, expectedNum, err)
 	if len(opts) == 0 {
 		testStandardGlob(t, idx, "Glob", tt, fsys, matches, err)
 	}
 }
 
 func TestGlobWalk(t *testing.T) {
-	doGlobWalkTest(t)
+	doGlobWalkTest(t, nil)
 }
 
 func TestGlobWalkWithFailOnIOErrors(t *testing.T) {
-	doGlobWalkTest(t, WithFailOnIOErrors())
+	doGlobWalkTest(t, nil, WithFailOnIOErrors())
 }
 
 func TestGlobWalkWithFailOnPatternNotExist(t *testing.T) {
-	doGlobWalkTest(t, WithFailOnPatternNotExist())
+	doGlobWalkTest(t, nil, WithFailOnPatternNotExist())
 }
 
 func TestGlobWalkWithFilesOnly(t *testing.T) {
-	doGlobWalkTest(t, WithFilesOnly())
+	doGlobWalkTest(t, numResultsFilesOnly, WithFilesOnly())
 }
 
 func TestGlobWalkWithNoFollow(t *testing.T) {
-	doGlobWalkTest(t, WithNoFollow())
+	doGlobWalkTest(t, numResultsNoFollow, WithNoFollow())
 }
 
 func TestGlobWalkWithNoHidden(t *testing.T) {
-	doGlobWalkTest(t, WithNoHidden())
+	doGlobWalkTest(t, numResultsNoHidden, WithNoHidden())
 }
 
 func TestGlobWalkWithAllOptions(t *testing.T) {
-	doGlobWalkTest(t, WithFailOnIOErrors(), WithFailOnPatternNotExist(), WithFilesOnly(), WithNoFollow())
+	doGlobWalkTest(t, numResultsAllOpts, WithFailOnIOErrors(), WithFailOnPatternNotExist(), WithFilesOnly(), WithNoFollow(), WithNoHidden())
 }
 
-func doGlobWalkTest(t *testing.T, opts ...GlobOption) {
+func doGlobWalkTest(t *testing.T, numResults []int, opts ...GlobOption) {
 	glob := newGlob(opts...)
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	for idx, tt := range matchTests {
 		if tt.testOnDisk && (!tt.caseSensitive || fsIsCaseSensitive) {
-			testGlobWalkWith(t, idx, tt, glob, opts, fsys)
+			expectedNum := tt.numResults
+			if numResults != nil {
+				expectedNum = numResults[idx]
+			} else if onWindows {
+				expectedNum = tt.winNumResults
+			}
+			testGlobWalkWith(t, idx, tt, glob, opts, expectedNum, fsys)
 		}
 	}
 }
 
-func testGlobWalkWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOption, fsys fs.FS) {
+func testGlobWalkWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOption, expectedNum int, fsys fs.FS) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("#%v. Glob(%#q, %#v) panicked: %#v", idx, tt.pattern, opts, r)
@@ -553,7 +567,7 @@ func testGlobWalkWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobO
 		matches = append(matches, p)
 		return nil
 	}, opts...)
-	verifyGlobResults(t, idx, "GlobWalk", tt, g, fsys, matches, err)
+	verifyGlobResults(t, idx, "GlobWalk", tt, g, matches, expectedNum, err)
 	if len(opts) == 0 {
 		testStandardGlob(t, idx, "GlobWalk", tt, fsys, matches, err)
 	}
@@ -569,38 +583,38 @@ func testStandardGlob(t *testing.T, idx int, fn string, tt MatchTest, fsys fs.FS
 }
 
 func TestFilepathGlob(t *testing.T) {
-	doFilepathGlobTest(t)
+	doFilepathGlobTest(t, nil)
 }
 
 func TestFilepathGlobWithFailOnIOErrors(t *testing.T) {
-	doFilepathGlobTest(t, WithFailOnIOErrors())
+	doFilepathGlobTest(t, nil, WithFailOnIOErrors())
 }
 
 func TestFilepathGlobWithFailOnPatternNotExist(t *testing.T) {
-	doFilepathGlobTest(t, WithFailOnPatternNotExist())
+	doFilepathGlobTest(t, nil, WithFailOnPatternNotExist())
 }
 
 func TestFilepathGlobWithFilesOnly(t *testing.T) {
-	doFilepathGlobTest(t, WithFilesOnly())
+	doFilepathGlobTest(t, numResultsFilesOnly, WithFilesOnly())
 }
 
 func TestFilepathGlobWithNoFollow(t *testing.T) {
-	doFilepathGlobTest(t, WithNoFollow())
+	doFilepathGlobTest(t, numResultsNoFollow, WithNoFollow())
 }
 
 func TestFilepathGlobWithNoHidden(t *testing.T) {
-	doFilepathGlobTest(t, WithNoHidden())
+	doFilepathGlobTest(t, numResultsNoHidden, WithNoHidden())
 }
 
-func doFilepathGlobTest(t *testing.T, opts ...GlobOption) {
+func doFilepathGlobTest(t *testing.T, numResults []int, opts ...GlobOption) {
 	glob := newGlob(opts...)
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 
-	// The patterns are relative to the "test" sub-directory.
+	// The patterns are relative to the "testdata" sub-directory.
 	defer func() {
 		os.Chdir("..")
 	}()
-	os.Chdir("test")
+	os.Chdir("testdata")
 
 	for idx, tt := range matchTests {
 		// Patterns ending with a slash are treated semantically different by
@@ -610,12 +624,19 @@ func doFilepathGlobTest(t *testing.T, opts ...GlobOption) {
 			ttmod := tt
 			ttmod.pattern = filepath.FromSlash(tt.pattern)
 			ttmod.testPath = filepath.FromSlash(tt.testPath)
-			testFilepathGlobWith(t, idx, ttmod, glob, opts, fsys)
+
+			expectedNum := tt.numResults
+			if numResults != nil {
+				expectedNum = numResults[idx]
+			} else if onWindows {
+				expectedNum = tt.winNumResults
+			}
+			testFilepathGlobWith(t, idx, ttmod, glob, opts, expectedNum, fsys)
 		}
 	}
 }
 
-func testFilepathGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOption, fsys fs.FS) {
+func testFilepathGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []GlobOption, expectedNum int, fsys fs.FS) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("#%v. FilepathGlob(%#q, %#v) panicked: %#v", idx, tt.pattern, g, r)
@@ -623,7 +644,7 @@ func testFilepathGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []G
 	}()
 
 	matches, err := FilepathGlob(tt.pattern, opts...)
-	verifyGlobResults(t, idx, "FilepathGlob", tt, g, fsys, matches, err)
+	verifyGlobResults(t, idx, "FilepathGlob", tt, g, matches, expectedNum, err)
 
 	if tt.isStandard && len(opts) == 0 {
 		stdMatches, stdErr := filepath.Glob(tt.pattern)
@@ -633,7 +654,7 @@ func testFilepathGlobWith(t *testing.T, idx int, tt MatchTest, g *glob, opts []G
 	}
 }
 
-func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, g *glob, fsys fs.FS, matches []string, err error) {
+func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, g *glob, matches []string, expectedNum int, err error) {
 	expectedErr := tt.expectedErr
 	if g.failOnPatternNotExist && tt.expectPatternNotExist {
 		expectedErr = ErrPatternNotExist
@@ -652,27 +673,12 @@ func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, g *glob, 
 	}
 
 	if !g.failOnPatternNotExist || !tt.expectPatternNotExist {
-		numResults := tt.numResults
-		if onWindows {
-			numResults = tt.winNumResults
-		}
-		if g.noHidden {
-			numResults = numResultsNoHidden[idx]
-		} else if g.filesOnly {
-			if g.noFollow {
-				numResults = numResultsAllOpts[idx]
-			} else {
-				numResults = numResultsFilesOnly[idx]
-			}
-		} else if g.noFollow {
-			numResults = numResultsNoFollow[idx]
-		}
 		if strings.HasPrefix(tt.pattern, "case-sensitive") && g.caseInsensitive && fsIsCaseSensitive {
-			numResults = 3
+			expectedNum = 3
 		}
 
-		if len(matches) != numResults {
-			t.Errorf("#%v. %v(%#q, %#v) = %#v - should have %#v results, got %#v", idx, fn, tt.pattern, g, matches, numResults, len(matches))
+		if len(matches) != expectedNum {
+			t.Errorf("#%v. %v(%#q, %#v) = %#v - should have %#v results, got %#v", idx, fn, tt.pattern, g, matches, expectedNum, len(matches))
 		}
 		// Skip testPath check for noHidden since the match semantics are different
 		if !g.filesOnly && !g.noFollow && !g.noHidden && inSlice(tt.testPath, matches) != tt.shouldMatchGlob {
@@ -689,7 +695,7 @@ func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, g *glob, 
 }
 
 func TestGlobSorted(t *testing.T) {
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	expected := []string{"a", "abc", "abcd", "abcde", "abxbbxdbxebxczzx", "abxbbxdbxebxczzy", "axbxcxdxe", "axbxcxdxexxx", "a☺b"}
 	matches, err := Glob(fsys, "a*")
 	if err != nil {
@@ -710,7 +716,7 @@ func TestGlobSorted(t *testing.T) {
 }
 
 func BenchmarkGlob(b *testing.B) {
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
@@ -722,7 +728,7 @@ func BenchmarkGlob(b *testing.B) {
 }
 
 func BenchmarkGlobWalk(b *testing.B) {
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
@@ -736,7 +742,7 @@ func BenchmarkGlobWalk(b *testing.B) {
 }
 
 func BenchmarkGoGlob(b *testing.B) {
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
@@ -790,17 +796,18 @@ func compareSlices(a, b []string) bool {
 
 func buildNumResults() {
 	testLen := len(matchTests)
-	numResultsFilesOnly = make([]int, testLen, testLen)
-	numResultsNoFollow = make([]int, testLen, testLen)
-	numResultsAllOpts = make([]int, testLen, testLen)
-	numResultsNoHidden = make([]int, testLen, testLen)
+	numResultsFilesOnly = make([]int, testLen)
+	numResultsNoFollow = make([]int, testLen)
+	numResultsNoHidden = make([]int, testLen)
+	numResultsAllOpts = make([]int, testLen)
 
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	g := newGlob()
 	for idx, tt := range matchTests {
 		if tt.testOnDisk {
 			filesOnly := 0
 			noFollow := 0
+			noHidden := 0
 			allOpts := 0
 			GlobWalk(fsys, tt.pattern, func(p string, d fs.DirEntry) error {
 				isDir, _ := g.isDir(fsys, "", p, d)
@@ -813,7 +820,15 @@ func buildNumResults() {
 					noFollow++
 				}
 
-				if hasNoFollow && (!isDir || p == "working-symlink") {
+				hasNoHidden := true
+				if strings.Contains(tt.pattern, "hidden-tests") && !strings.Contains(tt.pattern, ".*") {
+					hasNoHidden = (strings.Contains(tt.pattern, "hidden-dir") || !strings.Contains(p, "hidden-dir")) && !strings.Contains(p, "hidden-file")
+				}
+				if hasNoHidden {
+					noHidden++
+				}
+
+				if hasNoFollow && hasNoHidden && (!isDir || p == "working-symlink") {
 					allOpts++
 				}
 
@@ -822,34 +837,29 @@ func buildNumResults() {
 
 			numResultsFilesOnly[idx] = filesOnly
 			numResultsNoFollow[idx] = noFollow
-			numResultsAllOpts[idx] = allOpts
-
-			// Compute noHidden results by actually running with WithNoHidden
-			noHidden := 0
-			GlobWalk(fsys, tt.pattern, func(p string, d fs.DirEntry) error {
-				noHidden++
-				return nil
-			}, WithNoHidden())
 			numResultsNoHidden[idx] = noHidden
+			numResultsAllOpts[idx] = allOpts
 		}
 	}
 }
 
-func mkdirp(parts ...string) {
+func mkdirp(parts ...string) string {
 	dirs := path.Join(parts...)
 	err := os.MkdirAll(dirs, 0755)
 	if err != nil {
 		log.Fatalf("Could not create test directories %v: %v\n", dirs, err)
 	}
+	return dirs
 }
 
-func touch(parts ...string) {
+func touch(parts ...string) string {
 	filename := path.Join(parts...)
 	f, err := os.Create(filename)
 	if err != nil {
 		log.Fatalf("Could not create test file %v: %v\n", filename, err)
 	}
 	f.Close()
+	return filename
 }
 
 func symlink(oldname, newname string) {
@@ -868,98 +878,92 @@ func exists(parts ...string) bool {
 
 func TestMain(m *testing.M) {
 	// create the test directory
-	mkdirp("test", "a", "b", "c")
-	mkdirp("test", "a", "c")
-	mkdirp("test", "abc")
-	mkdirp("test", "axbxcxdxe", "xxx")
-	mkdirp("test", "axbxcxdxexxx")
-	mkdirp("test", "b")
-	mkdirp("test", "e", "[x]", "[y]")
-	mkdirp("test", "f", "{a,b}")
-	mkdirp("test", "case-sensitive")
+	mkdirp("testdata", "a", "b", "c")
+	mkdirp("testdata", "a", "c")
+	mkdirp("testdata", "abc")
+	mkdirp("testdata", "axbxcxdxe", "xxx")
+	mkdirp("testdata", "axbxcxdxexxx")
+	mkdirp("testdata", "b")
+	mkdirp("testdata", "e", "[x]", "[y]")
+	mkdirp("testdata", "f", "{a,b}")
+	mkdirp("testdata", "case-sensitive")
 
 	// create test files
-	touch("test", "1")
-	touch("test", "a", "abc")
-	touch("test", "a", "b", "c", "d")
-	touch("test", "a", "c", "b")
-	touch("test", "abc", "b")
-	touch("test", "abcd")
-	touch("test", "abcde")
-	touch("test", "abxbbxdbxebxczzx")
-	touch("test", "abxbbxdbxebxczzy")
-	touch("test", "axbxcxdxe", "f")
-	touch("test", "axbxcxdxe", "xxx", "f")
-	touch("test", "axbxcxdxexxx", "f")
-	touch("test", "axbxcxdxexxx", "fff")
-	touch("test", "a☺b")
-	touch("test", "b", "c")
-	touch("test", "c")
-	touch("test", "x")
-	touch("test", "xxx")
-	touch("test", "z")
-	touch("test", "α")
-	touch("test", "abc", "【test】.txt")
+	touch("testdata", "1")
+	touch("testdata", "a", "abc")
+	touch("testdata", "a", "b", "c", "d")
+	touch("testdata", "a", "c", "b")
+	touch("testdata", "abc", "b")
+	touch("testdata", "abcd")
+	touch("testdata", "abcde")
+	touch("testdata", "abxbbxdbxebxczzx")
+	touch("testdata", "abxbbxdbxebxczzy")
+	touch("testdata", "axbxcxdxe", "f")
+	touch("testdata", "axbxcxdxe", "xxx", "f")
+	touch("testdata", "axbxcxdxexxx", "f")
+	touch("testdata", "axbxcxdxexxx", "fff")
+	touch("testdata", "a☺b")
+	touch("testdata", "b", "c")
+	touch("testdata", "c")
+	touch("testdata", "x")
+	touch("testdata", "xxx")
+	touch("testdata", "z")
+	touch("testdata", "α")
+	touch("testdata", "abc", "【test】.txt")
 
-	touch("test", "e", "[")
-	touch("test", "e", "]")
-	touch("test", "e", "{")
-	touch("test", "e", "}")
-	touch("test", "e", "[]")
-	touch("test", "e", "[x]", "[y]", "z")
-	touch("test", "f", "{a,b}", "c")
+	touch("testdata", "e", "[")
+	touch("testdata", "e", "]")
+	touch("testdata", "e", "{")
+	touch("testdata", "e", "}")
+	touch("testdata", "e", "[]")
+	touch("testdata", "e", "[x]", "[y]", "z")
+	touch("testdata", "f", "{a,b}", "c")
 
-	touch("test", "case-sensitive", "file")
-	touch("test", "case-sensitive", "FILE")
-	touch("test", "case-sensitive", "File")
+	touch("testdata", "case-sensitive", "file")
+	touch("testdata", "case-sensitive", "FILE")
+	touch("testdata", "case-sensitive", "File")
 
-	touch("test", "}")
+	touch("testdata", "}")
 
-	mkdirp("test", ".hidden_dir")
-	mkdirp("test", ".another_hidden")
-	mkdirp("test", "foo", ".hidden", "deep")
-	mkdirp("test", "foo", "visible")
-	touch("test", ".hidden_file")
-	touch("test", ".hidden_dir", ".nested_hidden")
-	touch("test", ".another_hidden", "file")
-	touch("test", "foo", ".hidden", "bar")
-	touch("test", "foo", ".hidden", "deep", "bar")
-	touch("test", "foo", "visible", "bar")
-	touch("test", "foo", "bar")
+	hiddenSubdir := mkdirpHidden("testdata", "hidden-tests", "hidden-dir")
+	touchHidden(hiddenSubdir, "hidden-file")
+	touch(hiddenSubdir, "visible-file")
+	touchHidden("testdata", "hidden-tests", "hidden-file")
+	touch("testdata", "hidden-tests", "visible-file")
 
 	if !onWindows {
 		// these files/symlinks won't work on Windows
-		touch("test", "-")
-		touch("test", "]")
-		touch("test", "e", "*")
-		touch("test", "e", "**")
-		touch("test", "e", "****")
-		touch("test", "e", "?")
-		touch("test", "e", "\\")
+		touch("testdata", "-")
+		touch("testdata", "]")
+		touch("testdata", "e", "*")
+		touch("testdata", "e", "**")
+		touch("testdata", "e", "****")
+		touch("testdata", "e", "?")
+		touch("testdata", "e", "\\")
 
-		mkdirp("test", "f", "*")
-		touch("test", "f", "*", "a")
-		mkdirp("test", "f", "?")
-		touch("test", "f", "?", "a")
+		mkdirp("testdata", "f", "*")
+		touch("testdata", "f", "*", "a")
+		mkdirp("testdata", "f", "?")
+		touch("testdata", "f", "?", "a")
 
-		symlink("../axbxcxdxe/", "test/b/symlink-dir")
-		symlink("/tmp/nonexistant-file-20160902155705", "test/broken-symlink")
-		symlink("a/b", "test/working-symlink")
+		symlink("../axbxcxdxe/", "testdata/b/symlink-dir")
+		symlink("/tmp/nonexistant-file-20160902155705", "testdata/broken-symlink")
+		symlink("a/b", "testdata/working-symlink")
 
-		if !exists("test", "nopermission") {
-			mkdirp("test", "nopermission", "dir")
-			touch("test", "nopermission", "file")
-			os.Chmod(path.Join("test", "nopermission"), 0)
+		if !exists("testdata", "nopermission") {
+			mkdirp("testdata", "nopermission", "dir")
+			touch("testdata", "nopermission", "file")
+			os.Chmod(path.Join("testdata", "nopermission"), 0)
 		}
 	}
 
 	// initialize numResultsFilesOnly
 	buildNumResults()
 
-	// We created three files with identical names in the `test/case-sensitive`
+	// We created three files with identical names in the `testdata/case-sensitive`
 	// directory, only differing by case. If there's only one file in there, it's
 	// because the filesystem is _not_ case-sensitive.
-	fsys := os.DirFS("test")
+	fsys := os.DirFS("testdata")
 	matches, err := fs.Glob(fsys, "case-sensitive/*")
 	if err != nil {
 		os.Exit(1)
