@@ -94,16 +94,21 @@ func WithNoFollow() GlobOption {
 // WithNoHidden is an option that can be passed to Glob, GlobWalk, or
 // FilepathGlob. If passed, doublestar will not match hidden files and
 // directories (those starting with a dot) when using wildcards. This follows
-// traditional shell glob behavior where `*` does not match dotfiles by default.
+// traditional shell glob behavior where `*` or a `?` at the start will not
+// match dotfiles by default.
 //
 // Hidden files can still be matched by explicitly including them in the
 // pattern. For example, `.*` will match hidden files, and `.config/**` will
 // match files inside the .config directory.
 //
 // The rule is:
-//   - For `**`: do not descend into directories starting with `.`
-//   - For `*`: if the `*` is at the start of a path segment, do not match
-//     names starting with `.`
+//   - For `**`: do not descend into hidden directories
+//   - For `*` or a pattern starting with `?`: do not match dotfiles or
+//     directories
+//
+// On Windows, doublestar will check the file attributes and avoid hidden files
+// and directories this way, instead of matching the filename. Therefore, any
+// pattern with a `*` or `?` could potentially match a hidden file/directory.
 func WithNoHidden() GlobOption {
 	return func(g *glob) {
 		g.noHidden = true
