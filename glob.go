@@ -223,8 +223,15 @@ func (g *glob) globDir(fsys fs.FS, dir, pattern string, matches []string, canMat
 	}
 
 	var matched bool
+	patternStartsWithStar := len(pattern) > 0 && pattern[0] == '*'
 	for _, info := range dirs {
 		name := info.Name()
+
+		// Skip hidden files when noHidden is set and pattern starts with *
+		if g.noHidden && patternStartsWithStar && len(name) > 0 && name[0] == '.' {
+			continue
+		}
+
 		matched, e = matchWithSeparator(pattern, name, '/', false, g.caseInsensitive)
 		if e != nil {
 			return
@@ -268,6 +275,12 @@ func (g *glob) globDoubleStar(fsys fs.FS, dir string, matches []string, canMatch
 
 	for _, info := range dirs {
 		name := info.Name()
+
+		// Skip hidden files/directories when noHidden is set
+		if g.noHidden && len(name) > 0 && name[0] == '.' {
+			continue
+		}
+
 		isDir, err := g.isDir(fsys, dir, name, info)
 		if err != nil {
 			return nil, err
